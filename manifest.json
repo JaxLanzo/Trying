@@ -1,0 +1,24 @@
+{
+  "name": "Lux Meter - Éclaire ma maison",
+  "short_name": "Lux Mètre",
+  "description": "Une application web élégante qui utilise le capteur de lumière ambiante de votre appareil pour mesurer l'éclairement (en lux). Elle fournit des retours en temps réel et des interprétations utiles pour vous aider à obtenir l'éclairage parfait pour chaque activité, de la détente à la lecture.",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0D0D0D",
+  "theme_color": "#0D0D0D",
+  "scope": "/"
+}

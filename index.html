@@ -1,0 +1,243 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lux Meter - Assistant d'Éclairage</title>
+
+    <!-- PWA Manifest & Theme -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0D0D0D">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      .font-display {
+        font-family: 'Orbitron', sans-serif;
+      }
+    </style>
+    <!-- React and ReactDOM UMD builds -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Using React.createElement (h) instead of JSX to remove Babel dependency
+      const h = React.createElement;
+
+      // --- TYPES & CONSTANTS ---
+      const SensorStatus = {
+        IDLE: 'idle',
+        INITIALIZING: 'initializing',
+        ACTIVE: 'active',
+        DENIED: 'denied',
+        UNSUPPORTED: 'unsupported',
+        ERROR: 'error',
+      };
+
+      const LUX_LEVELS = [
+        { threshold: 20, label: "Obscurité", description: "Très faible luminosité, similaire à une pièce faiblement éclairée par la lune.", color: 'text-blue-300' },
+        { threshold: 50, label: "Ambiance tamisée", description: "Idéal pour une soirée cinéma ou un moment de détente.", color: 'text-purple-300' },
+        { threshold: 150, label: "Confortable", description: "Parfait pour se relaxer ou discuter, comme dans un salon bien éclairé.", color: 'text-indigo-300' },
+        { threshold: 300, label: "Zone de travail", description: "Assez de lumière pour les tâches quotidiennes qui ne demandent pas de précision.", color: 'text-green-300' },
+        { threshold: 500, label: "Lecture & Précision", description: "L'éclairage optimal pour lire, étudier ou effectuer des tâches minutieuses.", color: 'text-yellow-300' },
+        { threshold: 1000, label: "Très lumineux", description: "Équivaut à un éclairage de bureau intense ou à la lumière du jour près d'une fenêtre.", color: 'text-orange-300' },
+        { threshold: Infinity, label: "Lumière vive", description: "Comparable à la lumière du jour en extérieur, à l'ombre.", color: 'text-red-300' },
+      ];
+
+      const MAX_LUX_GAUGE = 1000;
+
+      // --- UI HELPER COMPONENTS ---
+      const Logo = () => {
+        // Use the direct hosted URL provided by the user for reliability.
+        const imageUrl = "https://www.eclairemamaison.com/Logo%202%20%20BBKG%20NOEFFECT.png";
+
+        return h('img', {
+          src: imageUrl,
+          alt: "Éclaire ma maison Logo",
+          className: "w-56 h-auto mx-auto"
+        });
+      };
+
+      const Gauge = ({ lux }) => {
+        const safeLux = Math.max(0, lux);
+        const percentage = Math.min(safeLux / MAX_LUX_GAUGE, 1);
+        const rotation = percentage * 180 - 90; // -90 to 90 degrees
+
+        const svg = h('svg', { viewBox: "0 0 100 50", className: "w-full h-full" },
+          h('path', { d: "M 10 50 A 40 40 0 0 1 90 50", fill: "none", stroke: "#374151", strokeWidth: "6", strokeLinecap: "round" }),
+          h('path', { d: "M 10 50 A 40 40 0 0 1 90 50", fill: "none", stroke: "url(#gradient)", strokeWidth: "6", strokeDasharray: "125.6", strokeDashoffset: 125.6 * (1 - percentage), style: { transition: 'stroke-dashoffset 0.5s ease-out' }, strokeLinecap: "round" }),
+          h('defs', null,
+            h('linearGradient', { id: "gradient", x1: "0%", y1: "0%", x2: "100%", y2: "0%" },
+              h('stop', { offset: "0%", stopColor: "#a78bfa" }),
+              h('stop', { offset: "50%", stopColor: "#34d399" }),
+              h('stop', { offset: "100%", stopColor: "#fbbf24" })
+            )
+          )
+        );
+
+        const needle = h('div', { className: "absolute bottom-0 left-1/2 w-px h-[90%] origin-bottom", style: { transform: `translateX(-50%) rotate(${rotation}deg)`, transition: 'transform 0.5s ease-out' } },
+          h('div', { className: "w-full h-full bg-amber-300 rounded-full" })
+        );
+        
+        const pivot = h('div', { className: "absolute bottom-0 left-1/2 w-4 h-4 bg-gray-700 border-2 border-amber-300 rounded-full transform -translate-x-1/2 translate-y-1/2" });
+
+        return h('div', { className: "relative w-64 h-32 mx-auto filter drop-shadow-[0_0px_15px_rgba(251,191,36,0.4)]" }, svg, needle, pivot);
+      };
+
+      const LuxDisplay = ({ lux }) => {
+        const interpretation = React.useMemo(() => {
+          if (lux === null) return LUX_LEVELS[0];
+          return LUX_LEVELS.find(level => lux < level.threshold) ?? LUX_LEVELS[LUX_LEVELS.length - 1];
+        }, [lux]);
+
+        return h('div', { className: "text-center transition-opacity duration-500 ease-in-out" },
+          h('p', { className: `font-display text-8xl font-bold ${interpretation.color}` }, lux !== null ? Math.round(lux) : '--'),
+          h('p', { className: "text-2xl text-gray-300 mt-2" }, "lux"),
+          h('div', { className: "mt-6 px-4" },
+            h('p', { className: "text-xl font-bold text-gray-100" }, interpretation.label),
+            h('p', { className: "text-md text-gray-400 mt-2 h-10" }, interpretation.description)
+          )
+        );
+      };
+
+      // --- MAIN APP COMPONENT ---
+      const App = () => {
+        const isDebugMode = React.useMemo(() => new URLSearchParams(window.location.search).get('debug') === 'true', []);
+        const [status, setStatus] = React.useState(isDebugMode ? SensorStatus.ACTIVE : SensorStatus.IDLE);
+        const [lux, setLux] = React.useState(isDebugMode ? 50 : null);
+        const [error, setError] = React.useState(null);
+
+        const startSensor = React.useCallback(async () => {
+          setStatus(SensorStatus.INITIALIZING);
+          
+          if (!('AmbientLightSensor' in window) || !window.AmbientLightSensor) {
+              setStatus(SensorStatus.UNSUPPORTED);
+              return;
+          }
+
+          try {
+              const permissionStatus = await navigator.permissions.query({ name: 'ambient-light-sensor' });
+              if (permissionStatus.state === 'denied') {
+                  setStatus(SensorStatus.DENIED);
+                  return;
+              }
+
+              const sensor = new window.AmbientLightSensor({ frequency: 1 });
+              sensor.onreading = () => {
+                  if (sensor.illuminance !== undefined && sensor.illuminance !== null) {
+                      setLux(sensor.illuminance);
+                  }
+              };
+              sensor.onerror = (event) => {
+                  if (event.error.name === 'NotAllowedError') {
+                      setStatus(SensorStatus.DENIED);
+                  } else {
+                      setError("Une erreur est survenue avec le capteur.");
+                      setStatus(SensorStatus.ERROR);
+                  }
+                  sensor.stop();
+              };
+              sensor.start();
+              setStatus(SensorStatus.ACTIVE);
+          } catch (err) {
+              setError("Impossible d'initialiser le capteur.");
+              setStatus(SensorStatus.ERROR);
+          }
+        }, []);
+        
+        const renderContent = () => {
+          switch (status) {
+            case SensorStatus.IDLE:
+              return h('div', { className: "text-center" },
+                h('h1', { className: "text-3xl font-bold text-gray-100" }, "Bienvenue"),
+                h('p', { className: "text-gray-400 mt-4 max-w-sm mx-auto" }, "Mesurez la lumière ambiante pour trouver l'éclairage parfait pour chaque pièce de votre maison."),
+                h('button', {
+                  onClick: startSensor,
+                  className: "mt-8 px-8 py-4 bg-amber-500 text-gray-900 font-bold rounded-full text-lg hover:bg-amber-400 transition-all transform hover:scale-105 shadow-lg shadow-amber-500/20"
+                }, "Démarrer la mesure")
+              );
+            case SensorStatus.INITIALIZING:
+              return h('p', { className: "text-gray-400 text-lg animate-pulse" }, "Initialisation du capteur...");
+            case SensorStatus.ACTIVE:
+              const debugUI = isDebugMode ? h('div', { className: "w-full max-w-sm pt-8" },
+                  h('p', { className: "text-center text-sm text-amber-400 mb-2 font-semibold" }, "Mode Simulation"),
+                  h('input', {
+                      type: "range", min: "0", max: MAX_LUX_GAUGE + 200, value: lux ?? 0,
+                      onChange: (e) => setLux(Number(e.target.value)),
+                      className: "w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg accent-amber-400"
+                  }),
+                  h('div', { className: "flex justify-between text-xs text-gray-400 px-1 mt-1" },
+                      h('span', null, '0'),
+                      h('span', null, `${MAX_LUX_GAUGE + 200} lux`)
+                  )
+              ) : null;
+              return h('div', { className: "flex flex-col items-center justify-center space-y-8 w-full" },
+                 h(Gauge, { lux: lux ?? 0 }),
+                 h(LuxDisplay, { lux: lux }),
+                 debugUI
+              );
+            case SensorStatus.UNSUPPORTED:
+              return h('div', { className: "text-center p-4 bg-red-900/20 rounded-lg" },
+                h('h2', { className: "text-2xl font-bold text-red-300" }, "Non supporté"),
+                h('p', { className: "text-red-400 mt-2 max-w-md" }, "Désolé, votre navigateur ou appareil ne prend pas en charge le capteur de lumière ambiante. Essayez sur un téléphone mobile récent.")
+              );
+            case SensorStatus.DENIED:
+               return h('div', { className: "text-center p-4 bg-yellow-900/20 rounded-lg max-w-md" },
+                h('h2', { className: "text-2xl font-bold text-yellow-300" }, "Permission requise"),
+                h('p', { className: "text-yellow-400 mt-2" }, "Pour utiliser le luxmètre, veuillez autoriser l'accès au capteur de lumière dans les paramètres de votre navigateur."),
+                h('button', {
+                  onClick: startSensor,
+                  className: "mt-6 px-6 py-2 bg-amber-500 text-gray-900 font-bold rounded-full hover:bg-amber-400 transition-all"
+                }, "Réessayer")
+              );
+            case SensorStatus.ERROR:
+              return h('p', { className: "text-red-400" }, error);
+            default:
+              return null;
+          }
+        };
+
+        return h('div', { className: "bg-[#0D0D0D] text-gray-200 min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-8" },
+          h('header', { className: "w-full py-4" }, h(Logo)),
+          h('main', { className: "flex-grow flex items-center justify-center w-full" }, renderContent()),
+          h('footer', { className: "w-full text-center py-4" },
+            h('a', {
+              href: "https://www.eclairemamaison.com", target: "_blank", rel: "noopener noreferrer",
+              className: "text-amber-400 hover:text-amber-300 transition-colors duration-300"
+            }, "Besoin d'aide pour votre éclairage ? Visitez eclairemamaison.com")
+          )
+        );
+      };
+
+      const rootElement = document.getElementById('root');
+      if (!rootElement) {
+        throw new Error("L'élément racine est introuvable pour monter l'application");
+      }
+      
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(h(React.StrictMode, null, h(App)));
+
+      // PWA Service Worker Registration
+      if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+              navigator.serviceWorker.register('/sw.js').then(registration => {
+                  console.log('SW registered: ', registration);
+              }).catch(registrationError => {
+                  console.log('SW registration failed: ', registrationError);
+              });
+          });
+      }
+    </script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
